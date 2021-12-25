@@ -1,24 +1,8 @@
 package pipeline
 
-//type ProcessResult struct {
-//	Result interface{}
-//	Error error
-//}
-
-//type ErrorHandler interface {
-//	ErrorHandler(err error)
-//}
-
-//type DefaultErrorHandler struct {}
-//func (DefaultErrorHandler)ErrorHandler(err error)  {
-//	fmt.Printf("pipeline error: %s \n", err.Error())
-//}
-
 type ReadOnlyStream <-chan interface{}
 type WriteOnlyStream chan<- interface{}
 type BidirectionalStream chan interface{}
-
-//type ReadOnlyErrorStream <-chan error
 
 // StageFn is a lower level function type that chains together multiple
 // stages using channels.

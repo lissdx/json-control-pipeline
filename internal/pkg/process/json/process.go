@@ -14,36 +14,48 @@ import (
 
 const sleepTimeMs = 100
 
-type ProcessSetting struct {
-}
-
+// Process main process obj
 type Process struct {
-	doneChannel  chan interface{}
-	inStream     pipeline.WriteOnlyStream
-	jsonPipeline pipeline.Pipeline
-	activeStatus atomic.Value
-	processWg    *sync.WaitGroup
+	doneChannel           chan interface{}
+	inStream              pipeline.WriteOnlyStream
+	jsonTransformPipeline pipeline.Pipeline
+	activeStatus          atomic.Value
+	processWg             *sync.WaitGroup
 }
 
+// NewJsonProcess Process constructor
 func NewJsonProcess() process.Processor {
 	return &Process{}
 }
 
+// InitProcess get conf. file and create main process data-pipeline
 func (jp *Process) InitProcess(conf process.Conf) {
 
+	// Create process step parser
 	processSteps := NewProcessSteps()
+	// Init ProcessSteps
 	processSteps.Init(string(conf))
 
-	jp.jsonPipeline.AddStage(jp.stubStart(), jp.errorHandler("stubStart"))
+	// Add some Start stage to process
+	// Not mandatory, just for visual control
+	jp.jsonTransformPipeline.AddStage(jp.stubStart(), jp.errorHandler("stubStart"))
 
+	// Fetch every step from ProcessSteps obj.
+	// and add it into our process
+	// use factory pattern
 	for processSteps.HasNext() {
-		pNameConf := processSteps.GetNext()
-		jp.jsonPipeline.AddStage(jp.ProcessFactory(pNameConf.ProcessName, pNameConf.ProcessConf), jp.errorHandler(pNameConf.ProcessName))
+		pNameConf := processSteps.Next()
+		// Add process stage
+		// The stage is created by ProcessName and conf. Factory pattern
+		jp.jsonTransformPipeline.AddStage(jp.ProcessFactory(pNameConf.ProcessName, pNameConf.ProcessConf), jp.errorHandler(pNameConf.ProcessName))
 	}
-	//jp.jsonPipeline.AddStage(jp.addField(`{"fieldName":"firstName","fieldValue":"George"}`), jp.errorHandler("addField"))
-	//jp.jsonPipeline.AddStage(jp.removeField(`{"fieldName":"age"}`), jp.errorHandler("removeField"))
-	//jp.jsonPipeline.AddStage(jp.countNumOfField(`{"targetFieldName":"numOfFields"}`), jp.errorHandler("countNumOfField"))
-	jp.jsonPipeline.AddStage(jp.stubFinal(), jp.errorHandler("stubFinal"))
+	//jp.jsonTransformPipeline.AddStage(jp.addField(`{"fieldName":"firstName","fieldValue":"George"}`), jp.errorHandler("addField"))
+	//jp.jsonTransformPipeline.AddStage(jp.removeField(`{"fieldName":"age"}`), jp.errorHandler("removeField"))
+	//jp.jsonTransformPipeline.AddStage(jp.countNumOfField(`{"targetFieldName":"numOfFields"}`), jp.errorHandler("countNumOfField"))
+
+	// Add some Final stage to process
+	// Not mandatory, just for visual control
+	jp.jsonTransformPipeline.AddStage(jp.stubFinal(), jp.errorHandler("stubFinal"))
 }
 
 func (jp *Process) Run() {
@@ -61,7 +73,7 @@ func (jp *Process) Run() {
 
 		log.Println("JsonProcess RUN")
 
-		processDone := jp.jsonPipeline.RunPlug(jp.doneChannel, inStream)
+		processDone := jp.jsonTransformPipeline.RunPlug(jp.doneChannel, inStream)
 
 		<-processDone
 	}(jp.processWg)
@@ -86,14 +98,15 @@ func (jp *Process) setActiveOff() {
 	jp.activeStatus.Store(uint8(0))
 }
 
-func (jp *Process)InStream() pipeline.WriteOnlyStream {
+func (jp *Process) InStream() pipeline.WriteOnlyStream {
 	if !jp.isActive() {
 		log.Fatal("JsonProcess not active")
 	}
 	return jp.inStream
 }
 
-func (jp *Process)ProcessFactory(processName string, processConf string) pipeline.ProcessFn {
+// ProcessFactory create and init new stage in process
+func (jp *Process) ProcessFactory(processName string, processConf string) pipeline.ProcessFn {
 	switch strings.ToLower(processName) {
 	case "removefield":
 		return jp.removeField(processConf)
@@ -109,7 +122,7 @@ func (jp *Process)ProcessFactory(processName string, processConf string) pipelin
 }
 
 // Process methods -----------------------------------------------------------------------------------------------
-func (jp *Process) addField(configuration string ) pipeline.ProcessFn {
+func (jp *Process) addField(configuration string) pipeline.ProcessFn {
 	var processName = "addField"
 	var config addConfiguration
 
@@ -136,7 +149,7 @@ func (jp *Process) addField(configuration string ) pipeline.ProcessFn {
 	}
 }
 
-func (jp *Process) removeField(configuration string ) pipeline.ProcessFn {
+func (jp *Process) removeField(configuration string) pipeline.ProcessFn {
 	var processName = "removeField"
 	var config removeFieldConfiguration
 
@@ -153,7 +166,7 @@ func (jp *Process) removeField(configuration string ) pipeline.ProcessFn {
 			panic(err)
 		}
 
-		if _, ok := dat[config.FieldName]; ok{
+		if _, ok := dat[config.FieldName]; ok {
 			delete(dat, config.FieldName)
 		}
 
@@ -167,7 +180,7 @@ func (jp *Process) removeField(configuration string ) pipeline.ProcessFn {
 	}
 }
 
-func (jp *Process) countNumOfField(configuration string ) pipeline.ProcessFn {
+func (jp *Process) countNumOfField(configuration string) pipeline.ProcessFn {
 	var processName = "countNumOfFields"
 	var config countNumOfFieldConfiguration
 
@@ -184,7 +197,7 @@ func (jp *Process) countNumOfField(configuration string ) pipeline.ProcessFn {
 			panic(err)
 		}
 
-		if _, ok := dat[config.TargetFieldName]; ok{
+		if _, ok := dat[config.TargetFieldName]; ok {
 			delete(dat, config.TargetFieldName)
 		}
 
